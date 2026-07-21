@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# moonshine-update: rebuild and reinstall moonshine from /opt/moonshine-src.
+#
+# Usage: sudo moonshine-update [--check] [--main] [--user USER] [--help]
+#
+# Default behavior:
+#   - Fetches the latest release tag from upstream (github.com/hgaiser/moonshine)
+#   - If HEAD already matches, exits without doing anything
+#   - Otherwise: checks out the tag, rebuilds, reinstalls artifacts,
+#     recreates the libgbm.so symlink if missing, recreates the RADV_PERFTEST
+#     systemd drop-in if missing, and restarts the service.
+#
+# Flags:
+#   --check     Dry-run: report what would happen, build nothing.
+#   --main      Track upstream/main instead of the latest release tag.
+#   --user USER Restart moonshine@USER.service (default: $SUDO_USER or source dir owner).
+#   --help      Show this help.
+#
+# Logs to /var/log/moonshine-update.log.
+#
+# This script must be run as root. The cargo build is delegated to the
+# owner of /opt/moonshine-src to avoid polluting the cargo cache with root-owned files.
+#
+# Nobara-specific workarounds applied by this script:
+#   1. /usr/lib64/libgbm.so symlink — mesa-libgbm-devel cannot be installed on Nobara
+#      because mesa-libgallium-freeworld obsoletes mesa-libgallium and blocks the
+#      dependency chain. The dev symlink is all we actually need.
+#   2. /etc/systemd/system/moonshine@.service.d/radv-video-encode.conf — RADV gates
+#      Vulkan Video encode extensions behind RADV_PERFTEST=video_encode. Without this
+#      drop-in, Moonshine's video encoder fails with "No suitable Vulkan physical
+#      device found".
+
+set -euo pipefail
+
+SRC_DIR=/opt/moonshine-src
+LOG=/var/log/moonshine-update.log
+UPSTREAM_REMOTE=upstream
+FORK_REMOTE=origin
+TAG_MODE="release"
+CHECK=0
+SERVICE_USER="${SUDO_USER:-$(stat -c '%U' "$SRC_DIR" 2>/dev/null || echo "$USER")}"
+
+usage() {
+    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --check) CHECK=1; shift ;;
+        --main)  TAG_MODE="main"; shift ;;
+        --user)  SERVICE_USER="$2"; shift 2 ;;
+        --help|-h) usage ;;
+        *) echo "Unknown option: $1" >&2; exit 1 ;;
+    esac
+done
+
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root (use sudo)." >&2
+    exit 1
+fi
+
+if [[ ! -d "$SRC_DIR/.git" ]]; then
+    echo "Source directory $SRC_DIR not found or not a git repo." >&2
+    exit 1
+fi
+
+SRC_OWNER=$(stat -c '%U' "$SRC_DIR")
+mkdir -p "$(dirname "$LOG")"
+touch "$LOG"
+
+log() { echo "[$(date -Is)] $*" | tee -a "$LOG" >&2; }
+
+cd "$SRC_DIR"
+
+CURRENT=$(git rev-parse HEAD)
+log "Current HEAD: $(git describe --tags --always HEAD) ($CURRENT)"
+log "Fetching upstream..."
+git fetch --tags --quiet "$UPSTREAM_REMOTE" main
+
+if [[ "$TAG_MODE" == "main" ]]; then
+    TARGET_REF="$UPSTREAM_REMOTE/main"
+else
+    TARGET_REF=$(git describe --tags --abbrev=0 "$UPSTREAM_REMOTE/main")
+fi
+TARGET=$(git rev-parse "$TARGET_REF")
+log "Target: $TARGET_REF ($TARGET)"
+
+if [[ "$CURRENT" == "$TARGET" ]]; then
+    log "Already up to date."
+    exit 0
+fi
+
+if [[ "$CHECK" -eq 1 ]]; then
+    log "Dry run (--check), exiting without building."
+    exit 0
+fi
+
+log "Checking out $TARGET_REF..."
+git checkout --quiet "$TARGET_REF"
+
+log "Building as $SRC_OWNER (release)..."
+if ! sudo -u "$SRC_OWNER" cargo build --release --workspace; then
+    log "Build failed."
+    exit 1
+fi
+
+# Nobara workaround 1: libgbm.so dev symlink.
+# See NOBARA.md for full context.
+if [[ ! -e /usr/lib64/libgbm.so ]]; then
+    log "Recreating /usr/lib64/libgbm.so symlink (Nobara mesa-libgallium-freeworld workaround)..."
+    ln -s libgbm.so.1 /usr/lib64/libgbm.so
+fi
+
+# Nobara workaround 2: RADV video encode env var drop-in.
+# See NOBARA.md for full context.
+DROPIN=/etc/systemd/system/moonshine@.service.d/radv-video-encode.conf
+if [[ ! -f "$DROPIN" ]]; then
+    log "Recreating $DROPIN (RADV Vulkan Video encode workaround)..."
+    mkdir -p "$(dirname "$DROPIN")"
+    cat > "$DROPIN" <<'EOF'
+[Service]
+Environment=RADV_PERFTEST=video_encode
+EOF
+fi
+
+log "Installing artifacts..."
+install -Dm755 target/release/moonshine           /usr/bin/moonshine
+install -Dm755 target/release/libmoonshine_wsi.so /usr/lib/moonshine/vulkan-layers/libmoonshine_wsi.so
+install -Dm755 dist/start-moonshine.sh            /usr/bin/start-moonshine.sh
+install -Dm644 dist/VkLayer_moonshine_wsi.json    /usr/share/vulkan/implicit_layer.d/VkLayer_moonshine_wsi.json
+install -Dm644 dist/moonshine@.service            /usr/lib/systemd/system/moonshine@.service
+install -Dm644 dist/60-moonshine.rules            /usr/lib/udev/rules.d/60-moonshine.rules
+install -Dm644 dist/moonshine-modules.conf        /usr/lib/modules-load.d/moonshine.conf
+
+log "Reloading systemd + udev..."
+systemctl daemon-reload
+udevadm control --reload-rules 2>/dev/null || true
+udevadm trigger 2>/dev/null || true
+
+log "Restarting moonshine@$SERVICE_USER..."
+systemctl restart "moonshine@$SERVICE_USER"
+
+sleep 2
+log "Update complete. Service status:"
+systemctl is-active "moonshine@$SERVICE_USER"

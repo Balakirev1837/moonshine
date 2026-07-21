@@ -136,12 +136,42 @@ Notes:
 - `launch_timeout_secs` is bumped from the default `2` to `15` — Steam takes
   5-10s to bootstrap, and 2s causes false failures.
 
+### Local patch: Steam pressure-vessel Vulkan loader chain
+
+Steam's pressure-vessel runtime supplies newer `VkLayerFunction` values in the
+Vulkan loader `pNext` chain (`VK_LOADER_LAYER_CREATE_DEVICE_CALLBACK` and
+`VK_LOADER_FEATURES`). Moonshine v0.12.0 represents that loader-private field
+as a Rust enum containing only `LinkInfo = 0` and `DataCallback = 1`.
+
+Reading a newer discriminant through that incomplete enum is undefined
+behavior. In optimized builds it caused Moonshine to treat the newer entry as
+`LinkInfo`, dereference its null `p_layer_info` union member, and crash in
+`moonshine_wsi::instance::create_instance`:
+
+```
+vulkandriverquery -> vkCreateInstance -> moonshine_wsi::instance::create_instance
+SIGSEGV at dereference of VkLayerInstanceCreateInfo::p_layer_info
+```
+
+Steam then cannot run its Vulkan/D3D driver queries. Its Proton compatibility
+probes (`d3ddriverquery64.exe`) hang and Steam sends them SIGQUIT after about
+
+The `nobara` branch fixes this by treating the function field as raw `u32` and
+following only the documented `VK_LAYER_LINK_INFO` value (`0`). All other and
+future values are skipped safely. The patch also contains a defensive null
+guard around the extension-name list and temporary WSI info logging while this
+behavior is validated.
+
 ## Update helper
 
 `scripts/moonshine-update` automates pulling the latest upstream release tag,
 rebuilding as the source-dir owner (so the cargo cache stays user-owned), and
 reinstalling the artifacts. It also recreates the workarounds above if they've
 been removed.
+
+The current helper predates the local WSI source patch and checks out upstream
+tags directly. Do not use it to upgrade until it is changed to rebuild the
+`nobara` branch (or the patch is rebased onto the selected upstream tag).
 
 Install with:
 
@@ -168,9 +198,12 @@ additions on the `nobara` branch:
 
 - `scripts/moonshine-update` — the update helper
 - `NOBARA.md` — this file
+- `moonshine-wsi/src/dispatch.rs` — pressure-vessel-safe Vulkan loader-chain
+  parsing for the Moonshine WSI layer
 
-No source patches are required for v0.12.0 on Nobara; all the workarounds are
-config/drop-in level.
+The WSI patch is intentionally local until it has been confirmed against this
+machine. This fork is a controlled deployment branch for this Nobara system;
+upstream contribution is optional.
 
 Git remotes (after `scripts/moonshine-update` setup):
 - `upstream` → `github.com/hgaiser/moonshine` (source of release tags)

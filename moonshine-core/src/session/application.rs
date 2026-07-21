@@ -211,16 +211,6 @@ fn make_envs(context: &ApplicationContext) -> Result<Vec<String>, ()> {
 		"ENABLE_MOONSHINE_WSI=1".to_string(),
 		// Enable WSI layer diagnostic logging (temporarily, for debugging).
 		"MOONSHINE_WSI_LOG=info".to_string(),
-		// Disable other implicit Vulkan layers that may conflict with moonshine's WSI layer.
-		// Nobara/Fedora ship multiple gaming-oriented layers (Mesa device select, Gamescope WSI,
-		// OBS capture, MangoHud, vkBasalt, anti-lag) that can interfere with moonshine's headless
-		// compositor, causing SIGSEGV in vulkandriverquery and steamwebhelper.
-		"NODEVICE_SELECT=1".to_string(),            // VK_LAYER_MESA_device_select
-		"DISABLE_GAMESCOPE_WSI=1".to_string(),       // VK_LAYER_FROG_gamescope_wsi
-		"DISABLE_OBS_VKCAPTURE=1".to_string(),       // VK_LAYER_OBS_vkcapture
-		"DISABLE_MANGOHUD=1".to_string(),             // MangoHud
-		"DISABLE_VKBASALT=1".to_string(),            // vkBasalt
-		"DISABLE_LAYER_MESA_ANTI_LAG=1".to_string(),  // VK_LAYER_MESA_anti_lag
 	];
 
 	if context.hdr {

@@ -68,7 +68,10 @@ pub unsafe extern "C" fn create_instance(
 	// containers even when enabled_extension_count > 0.  from_raw_parts with a
 	// null pointer is UB, so guard against it.
 	let mut exts: Vec<*const std::ffi::c_char> = if create_info.pp_enabled_extension_names.is_null() {
-		crate::log_warn!("pp_enabled_extension_names is null with count={}, treating as empty", create_info.enabled_extension_count);
+		crate::log_warn!(
+			"pp_enabled_extension_names is null with count={}, treating as empty",
+			create_info.enabled_extension_count
+		);
 		Vec::new()
 	} else {
 		std::slice::from_raw_parts(

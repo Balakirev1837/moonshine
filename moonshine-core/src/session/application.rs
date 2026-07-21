@@ -209,6 +209,8 @@ fn make_envs(context: &ApplicationContext) -> Result<Vec<String>, ()> {
 		format!("MOONSHINE_WAYLAND_DISPLAY={}", context.wayland_display),
 		// Activate the moonshine WSI Vulkan layer.
 		"ENABLE_MOONSHINE_WSI=1".to_string(),
+		// Enable WSI layer diagnostic logging (temporarily, for debugging).
+		"MOONSHINE_WSI_LOG=info".to_string(),
 		// Disable other implicit Vulkan layers that may conflict with moonshine's WSI layer.
 		// Nobara/Fedora ship multiple gaming-oriented layers (Mesa device select, Gamescope WSI,
 		// OBS capture, MangoHud, vkBasalt, anti-lag) that can interfere with moonshine's headless

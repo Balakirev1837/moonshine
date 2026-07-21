@@ -59,11 +59,24 @@ pub unsafe extern "C" fn create_instance(
 	// Only inject the extra WSI extensions when active.  In the degraded path
 	// the application's original create-info is passed through unchanged.
 	let create_info = &*p_create_info;
-	let mut exts: Vec<*const std::ffi::c_char> = std::slice::from_raw_parts(
+	crate::log_info!(
+		"create_instance: pp_enabled_extension_names={:p}, enabled_extension_count={}",
 		create_info.pp_enabled_extension_names,
-		create_info.enabled_extension_count as usize,
-	)
-	.to_vec();
+		create_info.enabled_extension_count
+	);
+	// Defensive: pp_enabled_extension_names may be null inside pressure-vessel
+	// containers even when enabled_extension_count > 0.  from_raw_parts with a
+	// null pointer is UB, so guard against it.
+	let mut exts: Vec<*const std::ffi::c_char> = if create_info.pp_enabled_extension_names.is_null() {
+		crate::log_warn!("pp_enabled_extension_names is null with count={}, treating as empty", create_info.enabled_extension_count);
+		Vec::new()
+	} else {
+		std::slice::from_raw_parts(
+			create_info.pp_enabled_extension_names,
+			create_info.enabled_extension_count as usize,
+		)
+		.to_vec()
+	};
 	let mut modified_create_info = *create_info;
 	if is_active {
 		let wayland_ext = c"VK_KHR_wayland_surface";

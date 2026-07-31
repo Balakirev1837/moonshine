@@ -351,6 +351,7 @@ impl CompositorHandler for MoonshineCompositor {
 	fn commit(&mut self, surface: &WlSurface) {
 		// Mark the screen as dirty so the next timer tick renders and sends a frame.
 		self.screen_dirty = true;
+		tracing::debug!(surface_id = ?surface.id(), "Wayland surface committed");
 
 		// Apply pending color management state.
 		if let Some(cm) = &mut self.color_management {

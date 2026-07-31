@@ -100,7 +100,7 @@ The WSI layer already routes `vkCreateXlibSurfaceKHR` through the XCB
 Xwayland-bypass path. It now injects `VK_KHR_xlib_surface` as well as the
 existing surface/Wayland/XCB extensions.
 
-## Current Diagnostic Result
+## Verified Result
 
 The server-side frame path is confirmed healthy with temporary trace logging:
 
@@ -112,18 +112,28 @@ Received frame
 DMA-BUF import + color conversion + hardware encode + packet send
 ```
 
-The Fedora 44 Moonlight client negotiates:
+The Fedora 44 Moonlight client initially negotiated:
 
 ```text
 video_format=Hevc
 ```
 
-It then sends repeated IDR requests. Moonshine repeatedly emits HEVC keyframes
-but the client stays black while audio and input continue to work. This is now
-a client decode/HEVC acceptance problem, not a Moonshine compositor, DMA-BUF,
-encoder, networking, or pairing problem.
+It then sent repeated IDR requests. Moonshine repeatedly emitted HEVC keyframes
+but the client stayed black while audio and input continued to work. This
+isolated the fault to the laptop's HEVC decode/acceptance path, not Moonshine
+compositing, DMA-BUF export/import, encoding, networking, pairing, or input.
 
-## Next Test: Client H.264 Fallback
+Disabling HEVC and AV1 on the Fedora laptop forced:
+
+```text
+Client negotiated video format video_format=H264
+```
+
+H.264 displayed successfully. The server encoder's observed frame latency was
+roughly 3-5 ms, so light remaining stutter during this validation is most
+likely wireless-network jitter rather than host-side rendering or encoding.
+
+## Client Codec Guidance
 
 In Moonlight on the Fedora laptop, disable HEVC/H.265 and AV1, disable HDR,
 Diagnostic` and confirm the server log reports:
@@ -132,17 +142,48 @@ Diagnostic` and confirm the server log reports:
 Client negotiated video format video_format=H264
 ```
 
-If H.264 displays correctly, inspect/update the laptop's Moonlight Qt,
-FFmpeg/VA-API, Mesa, and hardware-decoding stack for HEVC support. If H.264
-also remains black while producing the same server-side frame trace, inspect
-the Moonlight client logs and GameStream packet handling next.
+For this Fedora 44 laptop, retain the H.264-only setting until its Moonlight
+Qt, FFmpeg/VA-API, Mesa, and hardware-decoding stack can be investigated.
+If HEVC is needed later, gather these client details first:
+
+```bash
+rpm -q moonlight-qt mesa-va-drivers mesa-va-drivers-freeworld libva libva-utils
+vainfo
+lspci -nn | grep -iE 'vga|3d|display'
+flatpak list | grep -i moonlight
+```
+
+## Bazzite Client Pairing
+
+Bazzite is Fedora Atomic-derived and commonly carries a more complete
+gaming/media stack than plain Fedora. Pair it normally through Moonlight, but
+use a controlled codec sequence:
+
+1. Start with H.264, HDR disabled, 1080p60, and a moderate 10-20 Mbps bitrate.
+2. Confirm the host log says `video_format=H264` and that video appears.
+3. Enable HEVC only after the H.264 baseline works.
+4. Enable HDR last, after HEVC is known-good.
+
+The Bazzite client should be tested independently: the Fedora laptop's HEVC
+failure does not prove Bazzite will fail, but H.264 is the stable baseline.
 
 ## Temporary Diagnostics to Remove Later
 
 The current candidate includes compositor frame-handoff trace logs and RTSP
-codec logging. The service may have a temporary
-`trace-compositor.conf` drop-in. Remove the trace logging and the temporary
-X11/Wayland diagnostic applications once a stable codec path is confirmed.
+codec logging. The `trace-compositor.conf` systemd drop-in should be removed
+after this investigation so production sessions do not emit frame-level logs.
+The temporary `X11 Diagnostic` and `Wayland Diagnostic` application entries
+can also be removed from `~/.config/moonshine/config.toml`; retain
+`hdr = false` while using SDR/H.264 clients.
+
+## Update Safety
+
+Do not run the older `/usr/local/bin/moonshine-update` helper. It targets the
+old `/opt/moonshine-src` v0.12 worktree and can overwrite the active v0.14.5
+candidate with an obsolete build. Future upgrades should start from this
+branch/worktree, deliberately rebase the local WSI patches onto a selected
+upstream release, build with Rustup stable, run `moonshine healthcheck`, then
+install the resulting binary and WSI layer together.
 
 ## Rollback
 

@@ -182,6 +182,13 @@ screen with no swapchain.
 The `nobara` branch injects `VK_KHR_xlib_surface` alongside the existing
 Wayland, XCB, and base surface extensions.
 
+Steam validates its requested WSI extensions before creating an instance. The
+Moonshine layer therefore also declares `VK_KHR_surface`, Wayland, XCB, and
+Xlib extensions in `VkLayer_moonshine_wsi.json` via `instance_extensions`.
+That lets the Vulkan loader expose the WSI surface APIs during Steam's
+pre-instance capability probe rather than only injecting them after the probe
+has already failed.
+
 ## Update helper
 
 `scripts/moonshine-update` automates pulling the latest upstream release tag,

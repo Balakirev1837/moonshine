@@ -121,7 +121,7 @@ Steam before launching the fresh instance inside Moonshine's compositor:
 
 ```toml
 pre_command = [
-    ["/usr/bin/sh", "-c", "pkill -TERM -f '/usr/bin/st[e]am' || true"],
+    ["/usr/bin/sh", "-c", "pkill -TERM -f 'st[e]am' || true"],
     ["/usr/bin/sleep", "2"],
 ]
 launch_timeout_secs = 15
@@ -130,7 +130,10 @@ launch_timeout_secs = 15
 Notes:
 - The character class `[e]` in `st[e]am` prevents `pkill -f` from matching its
   own command line (a literal `[e]` in the regex won't match the literal
-  string `[e]` in pkill's process name).
+  string `[e]` in pkill's process name). Do not prefix it with `/usr/bin/`:
+  Steam's desktop autostart/session restore uses paths below
+  `~/.local/share/Steam/`, and a `/usr/bin/steam`-only pattern misses that
+  running instance and lets URI forwarding defeat compositor isolation.
 - `|| true` is required because `pkill` returns exit code 1 when no processes
   match, and systemd's `ExecStartPre` treats non-zero as failure.
 - `launch_timeout_secs` is bumped from the default `2` to `15` — Steam takes

@@ -170,6 +170,18 @@ future values are skipped safely. The patch also contains a defensive null
 guard around the extension-name list and temporary WSI info logging while this
 behavior is validated.
 
+### Local patch: Steam Xlib Vulkan surface advertisement
+
+Steam build `1784778118` probes `VK_KHR_xlib_surface` during startup. The WSI
+layer already intercepts `vkCreateXlibSurfaceKHR` and routes it through the
+XCB XWayland-bypass path, but v0.12.0 did not inject the corresponding
+instance extension. The Steam UI then logs missing `VK_KHR_xlib_surface` and
+fails its Vulkan initialization, leaving the client connected to a black
+screen with no swapchain.
+
+The `nobara` branch injects `VK_KHR_xlib_surface` alongside the existing
+Wayland, XCB, and base surface extensions.
+
 ## Update helper
 
 `scripts/moonshine-update` automates pulling the latest upstream release tag,

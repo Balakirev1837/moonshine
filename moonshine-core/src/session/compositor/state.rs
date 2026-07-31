@@ -881,9 +881,11 @@ impl MoonshineCompositor {
 			},
 			Err(mpsc::TrySendError::Full(_)) => {
 				// Channel full — release the buffer back to the pool.
+				tracing::debug!(buffer_index = idx, "Frame channel full; dropping compositor frame");
 				consumed.store(true, Ordering::Release);
 			},
 			Ok(()) => {
+				tracing::trace!(buffer_index = idx, "Exported compositor frame to video pipeline");
 				// Frame accepted — reset dirty tracking.
 				self.screen_dirty = false;
 				self.last_frame_sent_at = std::time::Instant::now();

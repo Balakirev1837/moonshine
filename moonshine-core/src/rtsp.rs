@@ -348,6 +348,7 @@ impl RtspServer {
 				return rtsp_response(cseq, request.version(), rtsp_types::StatusCode::BadRequest);
 			},
 		};
+		tracing::info!(?video_format, "Client negotiated video format");
 
 		let dynamic_range: u32 =
 			get_optional_sdp_attribute(&sdp_session, "x-nv-video[0].dynamicRangeMode").unwrap_or_default();

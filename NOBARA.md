@@ -182,12 +182,32 @@ screen with no swapchain.
 The `nobara` branch injects `VK_KHR_xlib_surface` alongside the existing
 Wayland, XCB, and base surface extensions.
 
-Steam validates its requested WSI extensions before creating an instance. The
-Moonshine layer therefore also declares `VK_KHR_surface`, Wayland, XCB, and
-Xlib extensions in `VkLayer_moonshine_wsi.json` via `instance_extensions`.
-That lets the Vulkan loader expose the WSI surface APIs during Steam's
-pre-instance capability probe rather than only injecting them after the probe
-has already failed.
+The extension injection is necessary once Steam reaches instance creation. It
+does not replace correct Vulkan ICD selection; see the next workaround.
+
+### Workaround 5: Give Steam both 32-bit and 64-bit RADV ICD manifests
+
+Nobara's user systemd environment can set `VK_ICD_FILENAMES` to only
+`radeon_icd.x86_64.json`. Moonshine launches Steam through a user transient
+unit, so the 32-bit Steam client inherits that 64-bit-only override and
+receives `VK_ERROR_INCOMPATIBLE_DRIVER` (`-9`) while probing Vulkan. Steam
+then logs `BInit - Unable to initialize Vulkan!`; GameStream audio works but
+the client receives no rendered frame.
+
+Prefix both Moonshine Steam commands with `/usr/bin/env` and set
+`VK_ICD_FILENAMES` to the colon-separated i686 and x86_64 RADV manifests:
+
+```toml
+command = [
+    "/usr/bin/env",
+    "VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.i686.json:/usr/share/vulkan/icd.d/radeon_icd.x86_64.json",
+    "/usr/bin/steam",
+    "steam://open/bigpicture",
+]
+```
+
+This override is limited to Moonshine-launched Steam and its children; it does
+not alter the desktop session's Vulkan environment.
 
 ## Update helper
 

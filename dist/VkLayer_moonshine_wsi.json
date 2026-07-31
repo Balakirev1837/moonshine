@@ -7,24 +7,6 @@
       "library_path": "/usr/lib/moonshine/vulkan-layers/libmoonshine_wsi.so",
       "implementation_version": "1",
       "description": "Moonshine WSI Layer — routes game frames to the Moonshine compositor (x86_64)",
-      "instance_extensions": [
-        {
-          "name": "VK_KHR_surface",
-          "spec_version": "25"
-        },
-        {
-          "name": "VK_KHR_wayland_surface",
-          "spec_version": "6"
-        },
-        {
-          "name": "VK_KHR_xcb_surface",
-          "spec_version": "6"
-        },
-        {
-          "name": "VK_KHR_xlib_surface",
-          "spec_version": "6"
-        }
-      ],
       "functions": {
          "vkNegotiateLoaderLayerInterfaceVersion": "vkNegotiateLoaderLayerInterfaceVersion",
          "vkGetInstanceProcAddr": "moonshine_vk_get_instance_proc_addr",

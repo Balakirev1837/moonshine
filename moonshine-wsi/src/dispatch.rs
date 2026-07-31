@@ -72,7 +72,7 @@ pub struct VkXlibSurfaceCreateInfoKHR {
 pub struct VkLayerInstanceCreateInfo {
 	pub s_type: StructureType,
 	pub p_next: *const std::ffi::c_void,
-	pub function: VkLayerFunction,
+	pub function: u32,
 	/// Union — interpret as `*mut VkLayerInstanceLink` when
 	/// `function == LinkInfo`.
 	pub p_layer_info: *mut VkLayerInstanceLink,
@@ -92,7 +92,7 @@ pub struct VkLayerInstanceLink {
 pub struct VkLayerDeviceCreateInfo {
 	pub s_type: StructureType,
 	pub p_next: *const std::ffi::c_void,
-	pub function: VkLayerFunction,
+	pub function: u32,
 	/// Union — interpret as `*mut VkLayerDeviceLink` when
 	/// `function == LinkInfo`.
 	pub p_layer_info: *mut VkLayerDeviceLink,
@@ -106,12 +106,11 @@ pub struct VkLayerDeviceLink {
 	pub pfn_next_get_device_proc_addr: PFN_vkGetDeviceProcAddr,
 }
 
-#[repr(u32)]
-#[derive(PartialEq)]
-pub enum VkLayerFunction {
-	LinkInfo = 0,
-	DataCallback = 1,
-}
+/// Vulkan loader `VkLayerFunction` values from `vk_layer.h`.
+///
+/// Keep this as a raw value: the loader can add new values, and interpreting
+/// an unknown discriminant as a Rust enum is undefined behavior.
+pub const VK_LAYER_LINK_INFO: u32 = 0;
 
 /// The header struct that `vkNegotiateLoaderLayerInterfaceVersion` fills in.
 #[repr(C)]
@@ -278,9 +277,11 @@ pub unsafe fn find_layer_link<T>(p_next: *const std::ffi::c_void, s_type: Struct
 				// Check if this is a VK_LAYER_LINK_INFO entry.
 				// The `function` field is at the same offset in both
 				// VkLayerInstanceCreateInfo and VkLayerDeviceCreateInfo.
-				let function_ptr = (cursor as *const u8).add(std::mem::offset_of!(VkLayerInstanceCreateInfo, function))
-					as *const VkLayerFunction;
-				if *function_ptr == VkLayerFunction::LinkInfo {
+				let function_ptr =
+					(cursor as *const u8).add(std::mem::offset_of!(VkLayerInstanceCreateInfo, function)) as *const u32;
+				// Steam pressure-vessel's loader can add newer function values.
+				// Only LinkInfo exposes p_layer_info; skip all other and future values.
+				if std::ptr::read_unaligned(function_ptr) == VK_LAYER_LINK_INFO {
 					return cursor as *mut T;
 				}
 			}

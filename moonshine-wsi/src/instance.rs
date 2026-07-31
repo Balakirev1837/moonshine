@@ -69,6 +69,7 @@ pub unsafe extern "C" fn create_instance(
 		if is_active {
 			let wayland_ext = c"VK_KHR_wayland_surface";
 			let xcb_ext = c"VK_KHR_xcb_surface";
+			let xlib_ext = c"VK_KHR_xlib_surface";
 			let surface_ext = c"VK_KHR_surface";
 
 			if !has_extension(&exts, wayland_ext) {
@@ -76,6 +77,9 @@ pub unsafe extern "C" fn create_instance(
 			}
 			if !has_extension(&exts, xcb_ext) {
 				exts.push(xcb_ext.as_ptr());
+			}
+			if !has_extension(&exts, xlib_ext) {
+				exts.push(xlib_ext.as_ptr());
 			}
 			if !has_extension(&exts, surface_ext) {
 				exts.push(surface_ext.as_ptr());

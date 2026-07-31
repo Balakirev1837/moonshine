@@ -122,6 +122,7 @@ Steam before launching the fresh instance inside Moonshine's compositor:
 ```toml
 pre_command = [
     ["/usr/bin/sh", "-c", "pkill -TERM -f 'st[e]am' || true"],
+    ["/usr/bin/sh", "-c", "rm -f \"$HOME/.steam/steam.pid\""],
     ["/usr/bin/sleep", "2"],
 ]
 launch_timeout_secs = 15
@@ -134,6 +135,10 @@ Notes:
   Steam's desktop autostart/session restore uses paths below
   `~/.local/share/Steam/`, and a `/usr/bin/steam`-only pattern misses that
   running instance and lets URI forwarding defeat compositor isolation.
+- Remove `$HOME/.steam/steam.pid` after terminating Steam. Steam's systemd
+  app scope can still be cleaning up when Moonshine launches its replacement;
+  a stale PID file makes the fresh bootstrap pass the dead desktop PID to
+  steamwebhelper and shut down immediately.
 - `|| true` is required because `pkill` returns exit code 1 when no processes
   match, and systemd's `ExecStartPre` treats non-zero as failure.
 - `launch_timeout_secs` is bumped from the default `2` to `15` — Steam takes
